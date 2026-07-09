@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Moon, Sun, Bell, Shield, Mail, Camera, Save, RefreshCw, Eye, EyeOff, CheckCircle, XCircle, AlertTriangle, Lock } from 'lucide-react';
+import { Moon, Sun, Bell, Shield, Mail, Camera, Save, RefreshCw, Eye, EyeOff, CheckCircle, XCircle, AlertTriangle, Lock, UploadCloud } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useProfileContext } from '../context/ProfileContext';
 import api from '../utils/api';
 
 const PASSWORD_RULES = [
@@ -60,12 +61,13 @@ const PasswordField = ({ id, label, placeholder, value, onChange, show, onToggle
 const Settings = () => {
   const { showToast } = useToast();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { profile: globalProfile, updateProfile, loading: profileLoading } = useProfileContext();
   const fileInputRef = useRef(null);
   const [profile, setProfile] = useState({ name: '', role: '', email: '' });
   const [profileImage, setProfileImage] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [uploadError, setUploadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -102,25 +104,15 @@ const Settings = () => {
   }, [currentPassword, newPassword, confirmPassword]);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await api.get('/api/auth/me');
-        if (res.success) {
-          setProfile({
-            name: res.data.name || '',
-            role: res.data.role || '',
-            email: res.data.email || '',
-          });
-          setProfileImage(res.data.profileImage || '');
-        }
-      } catch (err) {
-        showToast('Failed to load profile', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProfile();
-  }, [showToast]);
+    if (globalProfile) {
+      setProfile({
+        name: globalProfile.name || '',
+        role: globalProfile.role || '',
+        email: globalProfile.email || '',
+      });
+      setProfileImage(globalProfile.profileImage || '');
+    }
+  }, [globalProfile]);
 
   useEffect(() => {
     if (Object.keys(touched).length > 0) {
@@ -132,6 +124,7 @@ const Settings = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImageFile(file);
+    setUploadError(false);
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target?.result || '');
     reader.readAsDataURL(file);
@@ -139,18 +132,24 @@ const Settings = () => {
 
   const handleUploadImage = async () => {
     if (!imageFile) return;
+    const previousImage = profileImage;
     try {
       setUploading(true);
       const formData = new FormData();
       formData.append('image', imageFile);
       const res = await api.post('/api/auth/profile/image', formData);
       if (res.success) {
-        setProfileImage(res.data.profileImage);
+        const newImage = res.data.profileImage;
+        setProfileImage(newImage);
         setImageFile(null);
         setImagePreview('');
+        updateProfile({ profileImage: newImage });
         showToast('Profile picture updated!');
       }
     } catch (err) {
+      setProfileImage(previousImage);
+      setImagePreview('');
+      setUploadError(true);
       showToast('Failed to upload image: ' + (err.message || 'Unknown error'), 'error');
     } finally {
       setUploading(false);
@@ -165,8 +164,9 @@ const Settings = () => {
         role: profile.role,
       });
       if (res.success) {
-        showToast('Profile saved!');
+        updateProfile({ name: res.data.name, role: res.data.role });
         setProfile((prev) => ({ ...prev, name: res.data.name, role: res.data.role }));
+        showToast('Profile saved!');
       }
     } catch (err) {
       showToast('Failed to save: ' + (err.message || 'Unknown error'), 'error');
@@ -214,7 +214,7 @@ const Settings = () => {
 
   const strength = getStrength(newPassword);
 
-  if (loading) {
+  if (profileLoading && !globalProfile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
@@ -245,9 +245,19 @@ const Settings = () => {
             <div className="relative group">
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-2xl font-bold ring-4 ring-gray-100 dark:ring-gray-800 overflow-hidden">
                 {avatarSrc ? (
-                  <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
+                  <img
+                    key={avatarSrc}
+                    src={avatarSrc}
+                    alt=""
+                    className="w-full h-full object-cover animate-in fade-in duration-200"
+                  />
                 ) : (
                   profile.name ? profile.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) : 'A'
+                )}
+                {uploading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-full">
+                    <RefreshCw className="w-6 h-6 text-white animate-spin" />
+                  </div>
                 )}
               </div>
               <button
@@ -273,9 +283,14 @@ const Settings = () => {
                   disabled={uploading}
                   className="mt-2 px-4 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
                 >
-                  {uploading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  {uploading ? <UploadCloud className="w-3 h-3 animate-pulse" /> : <Save className="w-3 h-3" />}
                   {uploading ? 'Uploading...' : 'Save Image'}
                 </button>
+              )}
+              {uploadError && (
+                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                  <AlertTriangle size={12} />Upload failed. You can try again.
+                </p>
               )}
             </div>
           </div>

@@ -12,6 +12,7 @@ import {
 } from "../services/googleAuthService.js";
 
 import { createNotification } from "../services/notificationService.js";
+import { emitProfileUpdate } from "../socket/emitters.js";
 
 
 // ========================================
@@ -372,6 +373,8 @@ export const updateProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    emitProfileUpdate(user);
+
     res.status(200).json({ success: true, data: user });
   } catch (error) {
     console.error('Update profile error:', error);
@@ -399,6 +402,8 @@ export const uploadProfileImage = async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    emitProfileUpdate(user);
 
     res.status(200).json({ success: true, data: user });
   } catch (error) {

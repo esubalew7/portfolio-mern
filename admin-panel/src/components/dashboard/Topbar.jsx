@@ -1,10 +1,33 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sun, Moon, Bell, Search, LogOut, User as UserIcon, ChevronRight, Menu, CheckCheck, Trash2, ExternalLink } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useNotificationContext } from '../../context/NotificationContext';
 import api from '../../utils/api';
 import NotificationCard from '../notifications/NotificationCard';
+
+const TopbarAvatar = memo(({ src, name, email }) => {
+  const initials = name
+    ? name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : email
+      ? email[0].toUpperCase()
+      : 'A';
+
+  return (
+    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold ring-2 ring-white dark:ring-gray-950 hover:ring-blue-300 dark:hover:ring-blue-700 transition-all cursor-pointer shrink-0 overflow-hidden">
+      {src ? (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          className="w-full h-full object-cover animate-in fade-in duration-200"
+        />
+      ) : (
+        initials
+      )}
+    </div>
+  );
+});
 
 const BREADCRUMB_LABELS = {
   dashboard: 'Dashboard',
@@ -82,12 +105,6 @@ const Topbar = ({ onMenuClick, unreadCount: propUnreadCount, admin }) => {
     }
     navigate('/login');
   };
-
-  const initials = admin?.name
-    ? admin.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
-    : admin?.email
-      ? admin.email[0].toUpperCase()
-      : 'A';
 
   return (
     <header className="sticky top-0 z-30 bg-white/70 dark:bg-[#111827]/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/30 shrink-0">
@@ -220,13 +237,9 @@ const Topbar = ({ onMenuClick, unreadCount: propUnreadCount, admin }) => {
           <div className="relative ml-1" ref={dropdownRef}>
             <button
               onClick={() => setProfileOpen(!profileOpen)}
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold ring-2 ring-white dark:ring-gray-950 hover:ring-blue-300 dark:hover:ring-blue-700 transition-all cursor-pointer shrink-0 overflow-hidden"
+              className="shrink-0"
             >
-              {admin?.profileImage ? (
-                <img src={admin.profileImage} alt="" className="w-full h-full object-cover" />
-              ) : (
-                initials
-              )}
+              <TopbarAvatar src={admin?.profileImage} name={admin?.name} email={admin?.email} />
             </button>
 
             {profileOpen && (

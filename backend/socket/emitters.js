@@ -50,3 +50,15 @@ export function emitNotification(notification) {
 export function emitNotificationCreated(notification) {
   emitToAdmin('notification:new', notification);
 }
+
+export function emitProfileUpdate(user) {
+  emitToAdmin('profile:update', {
+    id: user._id,
+    name: user.name,
+    role: user.role,
+    email: user.email,
+    avatar: user.profileImage,
+    twoFactorEnabled: user.twoFactorEnabled,
+    updatedAt: user.updatedAt,
+  });
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -26,6 +26,29 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import api from '../../utils/api';
+
+const AdminAvatar = memo(({ src, name, email }) => {
+  const initials = name
+    ? name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : email
+      ? email[0].toUpperCase()
+      : 'A';
+
+  return (
+    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white dark:ring-gray-950 shrink-0 overflow-hidden">
+      {src ? (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          className="w-full h-full object-cover animate-in fade-in duration-200"
+        />
+      ) : (
+        initials
+      )}
+    </div>
+  );
+});
 
 const NAV_GROUPS = [
   {
@@ -173,13 +196,7 @@ const Sidebar = ({ open, onClose, admin }) => {
           onClick={() => navigate('/dashboard/settings')}
           className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/70 dark:hover:bg-white/[0.04] transition-colors group"
         >
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white dark:ring-gray-950 shrink-0 overflow-hidden">
-            {admin?.profileImage ? (
-              <img src={admin.profileImage} alt="" className="w-full h-full object-cover" />
-            ) : (
-              initials
-            )}
-          </div>
+          <AdminAvatar src={admin?.profileImage} name={admin?.name} email={admin?.email} />
           <div className="min-w-0 flex-1 text-left">
             <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
               {admin?.name || 'Admin'}

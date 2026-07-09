@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/dashboard/Sidebar';
 import Topbar from '../components/dashboard/Topbar';
 import { SocketProvider } from '../context/SocketContext';
 import { NotificationProvider } from '../context/NotificationContext';
+import { ProfileProvider, useProfileContext } from '../context/ProfileContext';
 import { useSocketContext } from '../context/SocketContext';
-import api from '../utils/api';
 
 const STATUS_CONFIG = {
   connected: { bg: 'bg-green-100 dark:bg-green-900/40', border: 'border-green-200 dark:border-green-700/50', text: 'text-green-700 dark:text-green-300', dot: 'bg-green-500', label: 'Connected' },
@@ -15,22 +15,9 @@ const STATUS_CONFIG = {
 
 const DashboardInner = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [admin, setAdmin] = useState(null);
-  const { socket, status } = useSocketContext();
+  const { profile: admin } = useProfileContext();
+  const { status } = useSocketContext();
   const statusStyle = STATUS_CONFIG[status] || STATUS_CONFIG.disconnected;
-
-  const fetchAdminInfo = async () => {
-    try {
-      const res = await api.get('/api/auth/me');
-      if (res.success) setAdmin(res.data);
-    } catch {
-      // silently fail
-    }
-  };
-
-  useEffect(() => {
-    fetchAdminInfo();
-  }, []);
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#111827] text-gray-900 dark:text-gray-100">
@@ -69,7 +56,9 @@ const DashboardLayout = () => {
   return (
     <SocketProvider>
       <NotificationProvider>
-        <DashboardInner />
+        <ProfileProvider>
+          <DashboardInner />
+        </ProfileProvider>
       </NotificationProvider>
     </SocketProvider>
   );
