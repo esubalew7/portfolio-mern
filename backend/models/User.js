@@ -63,6 +63,12 @@ const userSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+        // Password change tracking
+        passwordChangedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true, // adds createdAt & updatedAt automatically

@@ -11,6 +11,8 @@ import {
   extractGoogleUserInfo,
 } from "../services/googleAuthService.js";
 
+import { createNotification } from "../services/notificationService.js";
+
 
 // ========================================
 // @desc    Register new admin (optional)
@@ -402,6 +404,98 @@ export const uploadProfileImage = async (req, res) => {
   } catch (error) {
     console.error('Upload profile image error:', error);
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+  }
+};
+
+// ========================================
+// @desc    Change password
+// @route   PUT /api/auth/change-password
+// @access  Private
+// ========================================
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password and new password are required",
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password login is not configured for this account. Use Google authentication.",
+      });
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    const samePassword = await user.comparePassword(newPassword);
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password cannot be the same as your current password",
+      });
+    }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters and include uppercase, lowercase, number, and special character",
+      });
+    }
+
+    user.password = newPassword;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    clearTokenCookie(res);
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'Unknown';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+
+    console.log(`[AUDIT] Password changed | User: ${user.email} | Time: ${new Date().toISOString()} | IP: ${ip} | UA: ${userAgent}`);
+
+    try {
+      await createNotification({
+        type: 'content',
+        title: 'Security Alert',
+        description: 'Password changed successfully.',
+        message: `Your admin password was changed. IP: ${ip}`,
+      });
+    } catch (notifErr) {
+      console.error('Failed to create notification:', notifErr);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully. Please login again.",
+    });
+
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    });
   }
 };
 

@@ -2,8 +2,9 @@
 import express from "express";
 
 // Import controller functions
-import { register, login, googleLogin, getMe, updateProfile, uploadProfileImage, logout } from "../controllers/authController.js";
+import { register, login, googleLogin, getMe, updateProfile, uploadProfileImage, changePassword, logout } from "../controllers/authController.js";
 import protect from "../middleware/authMiddleware.js";
+import { changePasswordLimiter } from "../middleware/rateLimiter.js";
 import upload from "../middleware/upload.js";
 
 // Create router
@@ -45,6 +46,12 @@ router.put("/profile", protect, updateProfile);
 // @desc    Upload profile image to Cloudinary
 // ===============================
 router.post("/profile/image", protect, upload.single('image'), uploadProfileImage);
+
+// ===============================
+// @route   PUT /api/auth/change-password
+// @desc    Change admin password securely
+// ===============================
+router.put("/change-password", protect, changePasswordLimiter, changePassword);
 
 // ===============================
 // @route   POST /api/auth/logout

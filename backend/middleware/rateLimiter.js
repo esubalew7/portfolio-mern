@@ -21,3 +21,14 @@ export const setupLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+export const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Too many password change attempts. Please try again in 15 minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

@@ -1,9 +1,61 @@
-import { useState, useEffect, useRef } from 'react';
-import { Moon, Sun, Bell, Shield, Mail, User, Camera, Save, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Moon, Sun, Bell, Shield, Mail, Camera, Save, RefreshCw, Eye, EyeOff, CheckCircle, XCircle, AlertTriangle, Lock } from 'lucide-react';
 import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import api from '../utils/api';
+
+const PASSWORD_RULES = [
+  { label: 'Minimum 8 characters', test: (p) => p.length >= 8 },
+  { label: 'Uppercase letter', test: (p) => /[A-Z]/.test(p) },
+  { label: 'Lowercase letter', test: (p) => /[a-z]/.test(p) },
+  { label: 'Number', test: (p) => /\d/.test(p) },
+  { label: 'Special character', test: (p) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(p) },
+];
+
+const getStrength = (password) => {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) score++;
+  if (password.length >= 12) score++;
+  return Math.min(score, 5);
+};
+
+const strengthLabels = ['Very Weak', 'Weak', 'Medium', 'Strong', 'Very Strong'];
+const strengthColors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500'];
+const strengthTextColors = ['text-red-500', 'text-orange-500', 'text-yellow-500', 'text-lime-500', 'text-green-500'];
+
+const PasswordField = ({ id, label, placeholder, value, onChange, show, onToggle, error, disabled }) => (
+  <div>
+    <label htmlFor={id} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>
+    <div className="relative">
+      <input
+        id={id}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        className={`w-full px-4 py-2.5 pr-11 bg-gray-50 dark:bg-gray-800 border rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:border-transparent outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+          error ? 'border-red-400 dark:border-red-500 focus:ring-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500'
+        }`}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        tabIndex={-1}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+      >
+        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
+    {error && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+  </div>
+);
 
 const Settings = () => {
   const { showToast } = useToast();
@@ -16,6 +68,38 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  const validate = useCallback(() => {
+    const e = {};
+    if (!currentPassword) e.currentPassword = 'Current password is required';
+    if (!newPassword) {
+      e.newPassword = 'New password is required';
+    } else if (currentPassword && newPassword === currentPassword) {
+      e.newPassword = 'New password cannot be same as current password';
+    } else {
+      if (!PASSWORD_RULES[0].test(newPassword)) e.newPassword = 'Must be at least 8 characters';
+      else if (!PASSWORD_RULES[1].test(newPassword)) e.newPassword = 'Needs an uppercase letter';
+      else if (!PASSWORD_RULES[2].test(newPassword)) e.newPassword = 'Needs a lowercase letter';
+      else if (!PASSWORD_RULES[3].test(newPassword)) e.newPassword = 'Needs a number';
+      else if (!PASSWORD_RULES[4].test(newPassword)) e.newPassword = 'Needs a special character';
+    }
+    if (!confirmPassword) {
+      e.confirmPassword = 'Please confirm your new password';
+    } else if (newPassword !== confirmPassword) {
+      e.confirmPassword = 'Passwords do not match';
+    }
+    return e;
+  }, [currentPassword, newPassword, confirmPassword]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -37,6 +121,12 @@ const Settings = () => {
     };
     fetchProfile();
   }, [showToast]);
+
+  useEffect(() => {
+    if (Object.keys(touched).length > 0) {
+      setErrors(validate());
+    }
+  }, [currentPassword, newPassword, confirmPassword, touched, validate]);
 
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];
@@ -84,6 +174,45 @@ const Settings = () => {
       setSaving(false);
     }
   };
+
+  const handleChangePassword = async () => {
+    const validationErrors = validate();
+    setTouched({ currentPassword: true, newPassword: true, confirmPassword: true });
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
+
+    try {
+      setChanging(true);
+      const res = await api.put('/api/auth/change-password', {
+        currentPassword,
+        newPassword,
+      });
+      if (res.success) {
+        showToast(res.message || 'Password changed successfully!', 'success');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
+      }
+    } catch (err) {
+      const message = err?.data?.message || err?.message || 'Failed to change password';
+      showToast(message, 'error');
+    } finally {
+      setChanging(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setErrors({});
+    setTouched({});
+    setShowCurrent(false);
+    setShowNew(false);
+    setShowConfirm(false);
+  };
+
+  const strength = getStrength(newPassword);
 
   if (loading) {
     return (
@@ -187,14 +316,123 @@ const Settings = () => {
           </div>
 
           <div className="pt-2">
-            <button
+            <Button
               onClick={handleSaveProfile}
-              disabled={saving}
-              className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              loading={saving}
+              icon={Save}
             >
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {saving ? 'Saving...' : 'Save Profile'}
-            </button>
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Security */}
+      <Card glass>
+        <div className="border-b border-gray-100 dark:border-gray-800 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+              <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Security</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Update your administrator password securely.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-5">
+          <PasswordField
+            id="currentPassword"
+            label="Current Password"
+            placeholder="Enter your current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            show={showCurrent}
+            onToggle={() => setShowCurrent((s) => !s)}
+            error={touched.currentPassword && errors.currentPassword}
+            disabled={changing}
+          />
+
+          <PasswordField
+            id="newPassword"
+            label="New Password"
+            placeholder="Enter a new password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            show={showNew}
+            onToggle={() => setShowNew((s) => !s)}
+            error={touched.newPassword && errors.newPassword}
+            disabled={changing}
+          />
+
+          {newPassword && (
+            <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+              {/* Strength bar */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Password strength</span>
+                  <span className={`text-xs font-semibold ${strengthTextColors[strength - 1] || 'text-gray-400'}`}>
+                    {strengthLabels[strength - 1] || ''}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${strengthColors[strength - 1] || 'bg-gray-300'}`}
+                    style={{ width: `${(strength / 5) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Requirements checklist */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {PASSWORD_RULES.map((rule) => {
+                  const passed = rule.test(newPassword);
+                  return (
+                    <div key={rule.label} className="flex items-center gap-2 text-xs">
+                      {passed ? (
+                        <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                      ) : (
+                        <XCircle size={14} className="text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                      )}
+                      <span className={passed ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400 dark:text-gray-500'}>
+                        {rule.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <PasswordField
+            id="confirmPassword"
+            label="Confirm New Password"
+            placeholder="Re-enter your new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            show={showConfirm}
+            onToggle={() => setShowConfirm((s) => !s)}
+            error={touched.confirmPassword && errors.confirmPassword}
+            disabled={changing}
+          />
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              onClick={handleChangePassword}
+              loading={changing}
+              icon={Lock}
+              disabled={!currentPassword || !newPassword || !confirmPassword}
+            >
+              {changing ? 'Updating...' : 'Update Password'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleCancel}
+              disabled={changing}
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       </Card>
